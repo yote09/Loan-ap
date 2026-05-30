@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pro Loan System</title>
+    <style>
+        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        input, select { width: 100%; padding: 10px; box-sizing: border-box; }
+        button { grid-column: span 2; padding: 10px; background: #28a745; color: white; border: none; cursor: pointer; }
+        .loan-card { border: 1px solid #ddd; padding: 15px; margin-top: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Borrower Registration</h1>
+    <form id="loanForm" class="grid-form">
+        <input type="text" id="name" placeholder="Borrower Name" required>
+        <input type="text" id="contact" placeholder="Borrower Phone">
+        <input type="text" id="guarantor" placeholder="Guarantor Name">
+        <input type="text" id="gContact" placeholder="Guarantor Phone">
+        <select id="duration">
+            <option value="30">30 Days</option>
+            <option value="40">40 Days</option>
+        </select>
+        <input type="number" id="amount" placeholder="Total Loan Amount" required>
+        <input type="number" id="dailyPay" placeholder="Fixed Daily Amount" required>
+        <button type="submit">Register Borrower</button>
+    </form>
+
+    <div id="reportContainer" style="margin: 20px 0; background: #eee; padding: 10px;"></div>
+    <div id="loanList"></div>
+</div>
+
+<script>
+    let loans = JSON.parse(localStorage.getItem('loans')) || [];
+
+    function saveAndRender() {
+        localStorage.setItem('loans', JSON.stringify(loans));
+        const list = document.getElementById('loanList');
+        const report = document.getElementById('reportContainer');
+        list.innerHTML = '';
+        
+        let today = new Date().toISOString().split('T')[0];
+        let paidToday = [], notPaidToday = [];
+
+        loans.forEach((l, bIndex) => {
+            const history = l.history || [];
+            const collected = history.reduce((sum, p) => sum + p.amount, 0);
+            const balance = l.amount - collected;
+            const isPaidToday = history.some(p => p.date === today);
+
+            if (isPaidToday) paidToday.push(l.name);
+            else notPaidToday.push(l.name);
+
+            const card = document.createElement('div');
+            card.className = 'loan-card';
+            card.innerHTML = `
+                <h3>${l.name} ${balance <= 0 ? '✅' : '⏳'}</h3>
+                <p>Guarantor: ${l.guarantor} (${l.gContact})</p>
+                <p>Term: ${l.duration} Days | Balance: <strong>$${balance}</strong></p>
+                <input type="date" id="date-${bIndex}" value="${today}">
+                <button onclick="addPayment(${bIndex})">Pay $${l.dailyPay}</button>
+                <button onclick="deleteLoan(${bIndex})" style="background:red">Delete Profile</button>
+            `;
+            list.appendChild(card);
+        });
+
+        report.innerHTML = `<strong>Today:</strong> ✅ Paid: ${paidToday.length} | ⚠️ Pending: ${notPaidToday.length}`;
+    }
+
+    document.getElementById('loanForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        loans.push({
+            name: document.getElementById('name').value,
+            guarantor: document.getElementById('guarantor').value,
+            gContact: document.getElementById('gContact').value,
+            duration: document.getElementById('duration').value,
+            amount: parseFloat(document.getElementById('amount').value),
+            dailyPay: parseFloat(document.getElementById('dailyPay').value),
+            history: []
+        });
+        saveAndRender();
+        e.target.reset();
+    });
+
+    function addPayment(bIndex) {
+        const date = document.getElementById(`date-${bIndex}`).value;
+        loans[bIndex].history.push({ date, amount: loans[bIndex].dailyPay });
+        saveAndRender();
+    }
+
+    function deleteLoan(index) {
+        if(confirm('Delete this borrower entirely?')) {
+            loans.splice(index, 1);
+            saveAndRender();
+        }
+    }
+
+    saveAndRender();
+</script>
+</body>
+</html>
+

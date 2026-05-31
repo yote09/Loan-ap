@@ -2,79 +2,116 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pro Loan System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Loan Collector Pro</title>
     <style>
-        body { font-family: sans-serif; background: #f4f4f9; padding: 20px; }
-        .container { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        input, select { width: 100%; padding: 10px; box-sizing: border-box; }
-        button { grid-column: span 2; padding: 10px; background: #28a745; color: white; border: none; cursor: pointer; }
-        .loan-card { border: 1px solid #ddd; padding: 15px; margin-top: 15px; border-radius: 5px; }
+        :root { --primary: #2563eb; --bg: #f8fafc; --card-bg: #ffffff; --text: #1e293b; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 10px; }
+        .container { max-width: 500px; margin: auto; }
+        
+        .menu { display: flex; justify-content: space-around; background: white; padding: 10px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .menu-btn { cursor: pointer; color: var(--primary); font-weight: bold; border: none; background: none; }
+        
+        .page { display: none; }
+        .active { display: block; }
+        
+        input, select { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .loan-card { background: white; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+        .history-item { background: white; padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Borrower Registration</h1>
-    <form id="loanForm" class="grid-form">
-        <input type="text" id="name" placeholder="Borrower Name" required>
-        <input type="text" id="contact" placeholder="Borrower Phone">
-        <input type="text" id="guarantor" placeholder="Guarantor Name">
-        <input type="text" id="gContact" placeholder="Guarantor Phone">
-        <select id="duration">
-            <option value="30">30 Days</option>
-            <option value="40">40 Days</option>
-        </select>
-        <input type="number" id="amount" placeholder="Total Loan Amount" required>
-        <input type="number" id="dailyPay" placeholder="Fixed Daily Amount" required>
-        <button type="submit">Register Borrower</button>
-    </form>
+    <div class="menu">
+        <button class="menu-btn" onclick="showPage('regPage')">Register</button>
+        <button class="menu-btn" onclick="showPage('listPage')">Borrowers</button>
+        <button class="menu-btn" onclick="showPage('repPage')">Reports</button>
+    </div>
 
-    <div id="reportContainer" style="margin: 20px 0; background: #eee; padding: 10px;"></div>
-    <div id="loanList"></div>
+    <div id="regPage" class="page active">
+        <h1>Register New</h1>
+        <form id="loanForm">
+            <input type="text" id="name" placeholder="Borrower Name" required>
+            <input type="text" id="contact" placeholder="Borrower Phone" required>
+            <input type="text" id="guarantor" placeholder="Guarantor Name" required>
+            <input type="text" id="gContact" placeholder="Guarantor Phone" required>
+            <select id="duration"><option value="30">30 Days</option><option value="49">49 Days</option></select>
+            <input type="number" id="amount" placeholder="Total Loan Amount (TSh)" required>
+            <input type="number" id="dailyPay" placeholder="Daily Installment (TSh)" required>
+            <button type="submit">Save Borrower</button>
+        </form>
+    </div>
+
+    <div id="listPage" class="page">
+        <h1>Borrowers</h1>
+        <div id="loanList"></div>
+    </div>
+
+    <div id="repPage" class="page">
+        <h1>Daily Report</h1>
+        <div id="reportContainer" style="background:#dbeafe; padding:15px; border-radius:12px; margin-bottom:10px;"></div>
+        <h3>Full Transaction History</h3>
+        <div id="transactionHistory"></div>
+    </div>
 </div>
 
 <script>
     let loans = JSON.parse(localStorage.getItem('loans')) || [];
 
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+        document.getElementById(pageId).style.display = 'block';
+        saveAndRender();
+    }
+
     function saveAndRender() {
         localStorage.setItem('loans', JSON.stringify(loans));
         const list = document.getElementById('loanList');
         const report = document.getElementById('reportContainer');
-        list.innerHTML = '';
+        const historyDiv = document.getElementById('transactionHistory');
         
+        list.innerHTML = '';
         let today = new Date().toISOString().split('T')[0];
-        let paidToday = [], notPaidToday = [];
+        let paidToday = 0;
+        let allTransactions = [];
 
         loans.forEach((l, bIndex) => {
             const history = l.history || [];
-            const collected = history.reduce((sum, p) => sum + p.amount, 0);
+            const collected = history.reduce((sum, p) => sum + parseFloat(p.amount), 0);
             const balance = l.amount - collected;
-            const isPaidToday = history.some(p => p.date === today);
-
-            if (isPaidToday) paidToday.push(l.name);
-            else notPaidToday.push(l.name);
+            
+            history.forEach(p => allTransactions.push({ name: l.name, date: p.date, amount: p.amount }));
+            if (history.some(p => p.date === today)) paidToday++;
 
             const card = document.createElement('div');
             card.className = 'loan-card';
             card.innerHTML = `
-                <h3>${l.name} ${balance <= 0 ? '✅' : '⏳'}</h3>
-                <p>Guarantor: ${l.guarantor} (${l.gContact})</p>
-                <p>Term: ${l.duration} Days | Balance: <strong>$${balance}</strong></p>
-                <input type="date" id="date-${bIndex}" value="${today}">
-                <button onclick="addPayment(${bIndex})">Pay $${l.dailyPay}</button>
-                <button onclick="deleteLoan(${bIndex})" style="background:red">Delete Profile</button>
+                <strong>${l.name}</strong> - <span>${balance <= 0 ? '✅ Paid' : 'TSh ' + balance.toLocaleString()}</span>
+                <p style="font-size:0.8rem;">📱 ${l.contact} | 👤 ${l.guarantor}</p>
+                <div style="display: flex; gap: 5px; margin-top:10px;">
+                    <input type="number" id="amt-${bIndex}" value="${l.dailyPay}">
+                    <button onclick="addFlexiblePayment(${bIndex})">Pay</button>
+                </div>
             `;
             list.appendChild(card);
         });
 
-        report.innerHTML = `<strong>Today:</strong> ✅ Paid: ${paidToday.length} | ⚠️ Pending: ${notPaidToday.length}`;
+        report.innerHTML = `<strong>Today:</strong> Collected from ${paidToday} of ${loans.length} borrowers.`;
+        historyDiv.innerHTML = allTransactions.sort((a,b) => new Date(b.date) - new Date(a.date)).map(t => `
+            <div class="history-item">
+                <span><b>${t.name}</b></span>
+                <span>${t.date} | <b>TSh ${parseFloat(t.amount).toLocaleString()}</b></span>
+            </div>
+        `).join('');
     }
 
     document.getElementById('loanForm').addEventListener('submit', (e) => {
         e.preventDefault();
         loans.push({
             name: document.getElementById('name').value,
+            contact: document.getElementById('contact').value,
             guarantor: document.getElementById('guarantor').value,
             gContact: document.getElementById('gContact').value,
             duration: document.getElementById('duration').value,
@@ -82,25 +119,20 @@
             dailyPay: parseFloat(document.getElementById('dailyPay').value),
             history: []
         });
-        saveAndRender();
         e.target.reset();
+        alert("Borrower Registered!");
+        showPage('listPage');
     });
 
-    function addPayment(bIndex) {
-        const date = document.getElementById(`date-${bIndex}`).value;
-        loans[bIndex].history.push({ date, amount: loans[bIndex].dailyPay });
+    function addFlexiblePayment(bIndex) {
+        const amount = document.getElementById(`amt-${bIndex}`).value;
+        const date = new Date().toISOString().split('T')[0];
+        loans[bIndex].history.push({ date, amount: parseFloat(amount) });
         saveAndRender();
-    }
-
-    function deleteLoan(index) {
-        if(confirm('Delete this borrower entirely?')) {
-            loans.splice(index, 1);
-            saveAndRender();
-        }
+        alert("Payment Recorded");
     }
 
     saveAndRender();
 </script>
 </body>
 </html>
-
